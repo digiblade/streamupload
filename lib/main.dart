@@ -68,6 +68,7 @@ class _MyAppState extends State<MyApp> {
             "send:" + sent.toString() + "% total:" + total.toString() + "%");
       },
     );
+
     if (responseData.statusCode == 200) {
       setStatus("Done");
     } else {

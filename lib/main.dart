@@ -1,99 +1,154 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
-
-import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:path/path.dart';
 
-void main() {
-  return runApp(MyApp());
-}
+void main() => runApp(MyApp());
 
-class MyApp extends StatefulWidget {
-  MyApp({Key key}) : super(key: key);
-
-  @override
-  _MyAppState createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  File video;
-  String response = "";
-  int flag = 0;
-  ImagePicker img = new ImagePicker();
+class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(response),
-                RaisedButton(
-                  onPressed: () async {
-                    await pickVideo();
-                    startUpload();
-                  },
-                  child: Text("Upload Video"),
-                ),
-              ],
-            ),
+    return MaterialApp(home: CustomFilePicker() //set the class here
+        );
+  }
+}
+
+class CustomFilePicker extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() {
+    return _CustomFilePicker();
+  }
+}
+
+class _CustomFilePicker extends State<CustomFilePicker> {
+  File selectedfile;
+  Response response;
+  String progress;
+  Dio dio = new Dio();
+
+  selectFile() async {
+    // selectedfile = await FilePicker.platform.pickFiles(
+    //   type: FileType.custom,
+    //   allowedExtensions: ['jpg', 'pdf', 'mp4'],
+    //   //allowed extension to choose
+    // );
+
+    //for file_pocker plugin version 2 or 2+
+
+    FilePickerResult result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'pdf', 'mp4'],
+      //allowed extension to choose
+    );
+
+    if (result != null) {
+      //if there is selected file
+      selectedfile = File(result.files.single.path);
+    }
+
+    setState(() {}); //update the UI so that file name is shown
+  }
+
+  uploadFile() async {
+    String uploadurl = "https://digiblade.in/upload/video.php";
+    //dont use http://localhost , because emulator don't get that address
+    //insted use your local IP address or use live URL
+    //hit "ipconfig" in windows or "ip a" in linux to get you local IP
+
+    FormData formdata = FormData.fromMap({
+      "file": await MultipartFile.fromFile(selectedfile.path,
+          filename: basename(selectedfile.path)
+          //show only filename from path
           ),
-        ),
-      ),
-    );
-  }
-
-  Future pickVideo() async {
-    dynamic videoData = await img.getVideo(source: ImageSource.gallery);
-    setState(() {
-      video = File(videoData.path);
     });
-  }
 
-  uploadData(String fileName, File file) async {
-    Dio dio = new Dio();
-    dynamic base64Image = base64Encode(file.readAsBytesSync());
-    dynamic responseData = await dio.post(
-      "https://digiblade.in/upload/video.php",
-      data: {
-        "image": base64Image,
-        "name": fileName,
-      },
+    response = await dio.post(
+      uploadurl,
+      data: formdata,
       onSendProgress: (int sent, int total) {
-        setStatus(
-            "send:" + sent.toString() + "% total:" + total.toString() + "%");
+        String percentage = (sent / total * 100).toStringAsFixed(2);
+        setState(() {
+          progress = "$sent" +
+              " Bytes of " "$total Bytes - " +
+              percentage +
+              " % uploaded";
+          //update the progress
+        });
       },
     );
 
-    if (responseData.statusCode == 200) {
-      setStatus("Done");
+    if (response.statusCode == 200) {
+      print(response.toString());
+      //print response from server
     } else {
-      setStatus("Something went wrong");
+      print("Error during connection to server.");
     }
   }
 
-  void startUpload() {
-    setStatus('Uploading Image...');
-    setState(() {
-      flag = 1;
-    });
-    if (null == video) {
-      print("::1");
-      setStatus("errMessage");
-      return;
-    }
-    String fileName = video.path.split('/').last;
-    print("path :::: " + video.toString());
-    uploadData(fileName, video);
-  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        appBar: AppBar(
+          title: Text("Select File and Upload"),
+          backgroundColor: Colors.orangeAccent,
+        ), //set appbar
+        body: Container(
+            alignment: Alignment.center,
+            padding: EdgeInsets.all(40),
+            child: Column(
+              children: <Widget>[
+                Container(
+                  margin: EdgeInsets.all(10),
+                  //show file name here
+                  child: progress == null
+                      ? Text("Progress: 0%")
+                      : Text(
+                          basename("Progress: $progress"),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 18),
+                        ),
+                  //show progress status here
+                ),
 
-  setStatus(String s) {
-    setState(() {
-      response = s;
-    });
+                Container(
+                  margin: EdgeInsets.all(10),
+                  //show file name here
+                  child: selectedfile == null
+                      ? Text("Choose File")
+                      : Text(basename(selectedfile.path)),
+                  //basename is from path package, to get filename from path
+                  //check if file is selected, if yes then show file name
+                ),
+
+                Container(
+                    child: RaisedButton.icon(
+                  onPressed: () {
+                    selectFile();
+                  },
+                  icon: Icon(Icons.folder_open),
+                  label: Text("CHOOSE FILE"),
+                  color: Colors.redAccent,
+                  colorBrightness: Brightness.dark,
+                )),
+
+                //if selectedfile is null then show empty container
+                //if file is selected then show upload button
+                selectedfile == null
+                    ? Container()
+                    : Container(
+                        child: RaisedButton.icon(
+                        onPressed: () {
+                          uploadFile();
+                        },
+                        icon: Icon(Icons.folder_open),
+                        label: Text("UPLOAD FILE"),
+                        color: Colors.redAccent,
+                        colorBrightness: Brightness.dark,
+                      ))
+              ],
+            )));
   }
 }
